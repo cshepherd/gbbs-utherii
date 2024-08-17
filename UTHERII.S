@@ -16,8 +16,8 @@ cardslot    dfb   1 ; card slot
 
 bytcnt      dfb   0,0,0
 
-            jmp   init     ; reset card (and auto-detect)
-            jmp   reset      ; init for ring
+            jmp   reset     ; reset card (TODO auto-detect?)
+            jmp   init      ; init for ring
             jmp   ring      ; check for ring
             jmp   answer    ; answer if ring
             jmp   hangup    ; hangup connection
@@ -87,8 +87,7 @@ getdata
 reset       pha
             phx
             phy
-            ldy   cardslot
-            tya
+            lda   cardslot
             asl
             asl
             asl
@@ -110,6 +109,11 @@ reset       pha
 
             jsr   readglobalreg
             bne   initfail
+
+            lda   $c034
+            and   #$F0
+            sta   $c034 ; black border = initialized
+
             clc
             ply
             plx
@@ -117,6 +121,7 @@ reset       pha
             rts
 
 initfail    sec
+            brk  $00                  ; YOU LOSE
             ply
             plx
             pla
@@ -148,30 +153,27 @@ init        pha
             ldx   #$1a
             jsr   setaddr             ; 001A - rx mem
 
-            lda   #00                 ; 00 = 4x 1KB socket buffers
-            jsr   setdata             ; rx mem: 1K for up to 4 socks
-            jsr   setdata             ; tx mem (via auto inc): 1K for up to 4 sockets
+            lda   #$55                ; 00 = 4x 2KB socket buffers
+            jsr   setdata             ; rx mem: 2K for up to 4 socks
+            jsr   setdata             ; tx mem (via auto inc): 2K for up to 4 sockets
 
             lda   #$04
             ldx   #$04
             jsr   setaddr             ; 0404 = S0 source port
-
             lda   port_num
             jsr   setdata
             lda   port_num+1
-            jsr   setdata             ; (same as dest because who cares)
+            jsr   setdata
 
             lda   #$04
             ldx   #$00
-            jsr   setdata             ; $0400 = S0 mode port
-
+            jsr   setaddr             ; $0400 = S0 mode port
             lda   #$01
             jsr   setdata             ; $01 = TCP
 
             lda   #$04
             ldx   #$01
-            jsr   setdata             ; $0401 = S0 command port
-
+            jsr   setaddr             ; $0401 = S0 command port
             lda   #$01
             jsr   setdata             ; send OPEN command
 
@@ -182,29 +184,28 @@ init        pha
             beq   sockfail
             cmp   #$13
             beq   initpass
-            bra   ]slp
-initpass    ldy   #1
-            lda   #$04
+            bra   ]slp                ; loop until status of SOCK_INIT is reached
+initpass    lda   #$04
             ldx   #$01
             jsr   setaddr             ; $0401 = socket command register
             lda   #02
             jsr   setdata             ; $02 = LISTEN
+
+            lda   $c034
+            and   #$F0
+            clc
+            adc   #$0F
+            sta   $c034 ; white border = listening
+
             ply
             plx
             pla
-            clc
             rts
-
-sockfail    ply
-            plx
-            pla
-            sec 
-            rts
+sockfail    brk   $01                 ; YOU LOSE (SOCK_CLOSED)
 
 ; 'answer' function (answer if ringing)
 ; wiznet does this automatically, so do nothing
-answer      clc
-            rts
+answer      rts
 
 ; 'ring' function (check for ring)
 ; all regs preserved
@@ -217,9 +218,17 @@ ring        pha
             jsr   getdata
             beq   closed
             cmp   #$17                ; established?
-            beq   connected
-connected   lda   #01
+            bne   closed
+
+            lda   #01                 ; answer
             sta   active
+
+            lda   $c034
+            and   #$F0
+            clc
+            adc   #$06
+            sta   $c034 ; blue border = connected
+
             ply
             plx
             pla
@@ -250,17 +259,7 @@ hangup      pha
             rts
 
 ; chkdcd function
-; is a connection active?
-; all regs preserved
-chkdcd      pha
-            lda   active
-            beq   nodcd
-            pla
-            clc
-            rts
-nodcd       pla
-            sec
-            rts
+chkdcd      rts
 
 ; 'flush' function
 ; flush wiznet buffer
@@ -290,19 +289,16 @@ flush       pha
 
 ; setspd function
 ; set modem speed
-setspd      clc
-            rts
+setspd      rts
 
 ; raisedtr function
 ; raise dtr to send AT commands
-raisedtr    clc
-            rts
+raisedtr    rts
 
 ; shutdown function
 ; don't drop connection, just get ready to quit
 ; (disable SSC interrupts if we were a modem)
-shutdown    clc
-            rts
+shutdown    rts
 
 ; inp function
 ; get one byte frm wiznet buffer
@@ -325,7 +321,7 @@ inp         phx
             xce
             rep   $30                 ; longa longm
             lda   rx_rd
-            and   #$3FF               ; 1KB
+            and   #$7FF               ; 2KB
             clc
             adc   #$6000              ; RX base
             sta   rx_rd               ; NOTE storing it little-endian here
@@ -413,7 +409,7 @@ out         phx
             xce
             rep   $30                 ; 16 bit math because i can
             lda   tx_wr
-            and   #$03FF              ; 1KB
+            and   #$07FF              ; 2KB
             clc
             adc   #$4000              ; TX base
             sta   tx_wr               ; NOTE storing it little-endian here
