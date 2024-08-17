@@ -417,8 +417,7 @@ out         phx
             xce
             sep   $30
 
-]txwt       ldy   #1
-            lda   #$04
+]txwt       lda   #$04
             ldx   #$20
             jsr   setaddr             ; tx free space = $0420 blaze it
             jsr   getdata
@@ -434,18 +433,17 @@ out         phx
                                       ; (i srsly doubt this ever happens)
 
 havebyte3   lda   tx_wr+1
-            ldx   tx_wr
+            ldx   tx_wr               ; note little-endian load
             jsr   setaddr             ; start at this base address
 
             pla
-            ldy   #3
-            jsr   setdata
+            jsr   setdata             ; send the byte
 
             clc
             xce
             rep   $30
             lda   tx_ptr
-            inc
+            inc                       ; just a 16-bit inc
             sta   tx_ptr
             sec
             xce
