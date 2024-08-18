@@ -66,7 +66,7 @@ setglobalreg
 
 ; read global reg
 ; a = value
-readglobalreg
+getglobalreg
 ]cn6        lda   $c000       ; ]cn6+1 = card_base + 0
             rts
 
@@ -107,7 +107,7 @@ reset       pha
             lda   #$80                ; $80 = reset
             jsr   setglobalreg
 
-            jsr   readglobalreg
+            jsr   getglobalreg
             bne   initfail
 
             lda   $c034
@@ -391,9 +391,12 @@ have_byte2  pla                       ; restore the byte
 ; out function
 ; add one byte to wiznet buffer
 ; a = byte, xy preserved
+bytes       db    00,00
 out         phx
             phy
             pha                       ; save data byte
+            lda   #1
+            sta   bytes
             lda   #$04
             ldx   #$24
             jsr   setaddr             ; S0_TX_WR
@@ -438,12 +441,19 @@ havebyte3   lda   tx_wr+1
 
             pla
             jsr   setdata             ; send the byte
+            pha
+            cmp   #$0D
+            bne   notcr
+            lda   #$0a
+            jsr   setdata             ; add cr after lf
+            inc   bytes
 
-            clc
+notcr       clc
             xce
             rep   $30
             lda   tx_ptr
-            inc                       ; just a 16-bit inc
+            clc
+            adc   bytes
             sta   tx_ptr
             sec
             xce
@@ -463,10 +473,23 @@ havebyte3   lda   tx_wr+1
             lda   #$20
             jsr   setdata             ; SEND command
 
-]wt         nop
-            jsr   getdata
-            bne   ]wt          ; wait for send completion
+            INC   bytcnt              ; do byte-counting
+            BNE   wt
+            INC   bytcnt+1
+            BNE   wt
+            INC   bytcnt+2
 
+wt          nop
+            lda   #$04
+            ldx   #$01
+            jsr   setaddr
+            jsr   getdata
+            bne   wt          ; wait for send completion
+
+            pla
             ply
             plx
+            clc
             rts
+
+            asc   'UthernetII'
