@@ -317,17 +317,14 @@ inp         phx
             sta   rx_rd
             sta   rx_rd_orig
 
+            lda   rx_rd               ; AND #$07ff
+            and   #$FF                ; ADD #$6000
+            sta   rx_rd               ; former 65816 zone
+            lda   rx_rd+1             ; (hence little endian)
+            and   #$07
             clc
-            xce
-            rep   $30                 ; longa longm
-            lda   rx_rd
-            and   #$7FF               ; 2KB
-            clc
-            adc   #$6000              ; RX base
-            sta   rx_rd               ; NOTE storing it little-endian here
-            sec
-            xce
-            sep   $30                 ; shorta shortm
+            adc   #$60
+            sta   rx_rd+1
 
             lda   #$04
             ldx   #$26
@@ -351,18 +348,21 @@ have_byte   lda   rx_rd+1             ; at least 1 byte available
             jsr   getdata             ; read the byte from the buffer
             pha
 
-            clc                       ; inc wiznet read buffer
-            xce
-            rep   $30                 ; longa longx
             lda   rx_rd_orig
-            inc
+            clc
+            adc   #$01
             sta   rx_rd_orig          ; this is what we'll write back to rx_rd
+            lda   rx_rd_orig+1
+            adc   #$00
+            sta   rx_rd_orig+1        ; converted 65816 addition
+
             lda   rx_rcvd
-            dec 
-            sta   rx_rcvd             ; also subtract 1 from rx_rcvd
             sec
-            xce
-            sep   $30                 ; shorta shortx
+            sbc   #$01
+            sta   rx_rcvd             ; also subtract 1 from rx_rcvd
+            lda   rx_rcvd+1
+            sbc   #$00
+            sta   rx_rcvd+1           ; converted 65816 subtraction
 
             ldy   #1
             lda   #$04
@@ -410,17 +410,14 @@ out         phx
             sta   tx_ptr              ; tx_ptr will be the exact original value
                                       ; + 4KB, 8KB etc without translation
 
+            lda   tx_wr               ; AND #$07ff
+            and   #$FF                ; ADD #$4000
+            sta   tx_wr               ; former 65816 zone
+            lda   tx_wr+1             ; (hence little endian)
+            and   #$07
             clc
-            xce
-            rep   $30                 ; 16 bit math because i can
-            lda   tx_wr
-            and   #$07FF              ; 2KB
-            clc
-            adc   #$4000              ; TX base
-            sta   tx_wr               ; NOTE storing it little-endian here
-            sec
-            xce
-            sep   $30
+            adc   #$40
+            sta   tx_wr+1
 
 ]txwt       lda   #$04
             ldx   #$20
@@ -450,16 +447,13 @@ havebyte3   lda   tx_wr+1
             jsr   setdata             ; add cr after lf
             inc   bytes
 
-notcr       clc
-            xce
-            rep   $30
-            lda   tx_ptr
+notcr       lda   tx_ptr
             clc
             adc   bytes
             sta   tx_ptr
-            sec
-            xce
-            sep   $30
+            lda   tx_ptr+1
+            adc   #00
+            sta   tx_ptr+1
 
             lda   #$04
             ldx   #$24
