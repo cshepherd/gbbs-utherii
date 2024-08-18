@@ -367,15 +367,17 @@ have_byte   lda   rx_rd+1             ; at least 1 byte available
             ldy   #1
             lda   #$04
             ldx   #$28                ; add rx_rcvd to rx_rd_orig and store back in $0428
+            jsr   setaddr
             lda   rx_rd_orig+1
             jsr   setdata
             lda   rx_rd_orig
             jsr   setdata
 
-            lda   rx_rcvd
-            bne   have_byte2
-            lda   rx_rcvd+1
-            bne   have_byte2
+* muti-byte-receive support broken
+*            lda   rx_rcvd
+*            bne   have_byte2
+*            lda   rx_rcvd+1
+*            bne   have_byte2
 
             ldx   #$01
             jsr   setaddrlo           ; S0 command register
@@ -486,7 +488,7 @@ wt          nop
             jsr   getdata
             bne   wt          ; wait for send completion
 
-            pla
+            pla               ; restore a to print the byte
             ply
             plx
             clc
